@@ -3,26 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>프랑스 실사 산책 (Real Walk in France)</title>
+    <title>Paris Street Walk - 1인칭 실사 산책</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Malgun Gothic', sans-serif; }
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Apple SD Gothic Neo', sans-serif; }
         #ui {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            color: white; text-align: center; background: rgba(0,0,0,0.8); padding: 30px;
-            border-radius: 15px; cursor: pointer; z-index: 10; border: 1px solid #444;
+            color: white; text-align: center; background: rgba(0,0,0,0.85); padding: 40px;
+            border-radius: 20px; cursor: pointer; z-index: 10; border: 1px solid #555;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
         }
-        #ui h1 { margin-top: 0; color: #ffeb3b; }
-        #ui p { margin: 10px 0; line-height: 1.6; }
-        #loading-bar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: white; display: none; }
+        #ui h1 { margin: 0 0 15px 0; color: #f0db4f; font-size: 24px; }
+        #ui p { margin: 5px 0; font-size: 14px; opacity: 0.8; }
+        .crosshair {
+            position: absolute; top: 50%; left: 50%; width: 4px; height: 4px;
+            background: rgba(255,255,255,0.5); border-radius: 50%; transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
     <div id="ui">
-        <h1>실사 프랑스 산책 게임</h1>
-        <p>화면을 클릭하면 시작합니다.</p>
-        <p><b>조작 방법</b><br>이동: W, A, S, D 키<br>시점 전환: 마우스 움직임<br>나가기: ESC 키</p>
+        <h1>파리 도보 산책</h1>
+        <p>화면을 클릭하면 파리 거리로 들어갑니다</p>
+        <p style="margin-top:20px;">[ W, A, S, D ] 이동</p>
+        <p>[ 마우스 ] 시선 돌리기</p>
     </div>
-    <div id="loading-bar">데이터를 불러오는 중입니다... 잠시만 기다려주세요.</div>
+    <div class="crosshair"></div>
 
     <script type="importmap">
     {
@@ -39,96 +45,74 @@
         import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
         import { LumaSplatsThree } from '@lumaai/luma-web';
 
-        // 1. 장면(Scene) 및 카메라 설정
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         
-        // 초기 카메라 위치 (지면에 서 있는 높이)
-        camera.position.set(0, 1.7, 5); 
+        // 1인칭 눈높이 설정 (1.6m)
+        const eyeHeight = 1.6;
+        camera.position.set(0, eyeHeight, 0);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        // 2. 실사 3D 데이터 로드 (프랑스 멘통 성)
-        // 출처: Luma AI 공식 라이브러리 예제 주소
+        // 실제 파리 거리 데이터 (Rue de l'Abreuvoir)
         const splat = new LumaSplatsThree({
-            source: 'https://lumalabs.ai/capture/da82625c-9c8d-4d05-a9f7-3367ecab438c' 
+            source: 'https://lumalabs.ai/capture/d80d1962-f19b-43d7-846f-c179c38f1588'
         });
         scene.add(splat);
 
-        // 3. 컨트롤 설정
         const controls = new PointerLockControls(camera, document.body);
         const ui = document.getElementById('ui');
 
-        ui.addEventListener('click', () => {
-            controls.lock();
-        });
+        ui.addEventListener('click', () => controls.lock());
+        controls.addEventListener('lock', () => ui.style.display = 'none');
+        controls.addEventListener('unlock', () => ui.style.display = 'block');
 
-        controls.addEventListener('lock', () => {
-            ui.style.display = 'none';
-        });
-
-        controls.addEventListener('unlock', () => {
-            ui.style.display = 'block';
-        });
-
-        // 4. 이동 로직
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-        const velocity = new THREE.Vector3();
-        const direction = new THREE.Vector3();
+        let walkTime = 0; // 머리 흔들림 계산용
 
-        const onKeyDown = (event) => {
-            switch (event.code) {
-                case 'KeyW': moveForward = true; break;
-                case 'KeyA': moveLeft = true; break;
-                case 'KeyS': moveBackward = true; break;
-                case 'KeyD': moveRight = true; break;
-            }
-        };
+        document.addEventListener('keydown', (e) => {
+            if(e.code === 'KeyW') moveForward = true;
+            if(e.code === 'KeyA') moveLeft = true;
+            if(e.code === 'KeyS') moveBackward = true;
+            if(e.code === 'KeyD') moveRight = true;
+        });
+        document.addEventListener('keyup', (e) => {
+            if(e.code === 'KeyW') moveForward = false;
+            if(e.code === 'KeyA') moveLeft = false;
+            if(e.code === 'KeyS') moveBackward = false;
+            if(e.code === 'KeyD') moveRight = false;
+        });
 
-        const onKeyUp = (event) => {
-            switch (event.code) {
-                case 'KeyW': moveForward = false; break;
-                case 'KeyA': moveLeft = false; break;
-                case 'KeyS': moveBackward = false; break;
-                case 'KeyD': moveRight = false; break;
-            }
-        };
-
-        document.addEventListener('keydown', onKeyDown);
-        document.addEventListener('keyup', onKeyUp);
-
-        // 5. 애니메이션 루프 (프레임 렌더링)
         function animate() {
             requestAnimationFrame(animate);
 
             if (controls.isLocked) {
-                const delta = 0.05; // 프레임 간격 조절
+                const moveSpeed = 0.05;
+                
+                // 이동 처리
+                if (moveForward) controls.moveForward(moveSpeed);
+                if (moveBackward) controls.moveForward(-moveSpeed);
+                if (moveLeft) controls.moveRight(-moveSpeed);
+                if (moveRight) controls.moveRight(moveSpeed);
 
-                // 감속 (미끄러짐 방지)
-                velocity.x -= velocity.x * 10.0 * delta;
-                velocity.z -= velocity.z * 10.0 * delta;
-
-                direction.z = Number(moveForward) - Number(moveBackward);
-                direction.x = Number(moveRight) - Number(moveLeft);
-                direction.normalize();
-
-                // 이동 속도 적용
-                if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
-                if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
-
-                controls.moveRight(-velocity.x * delta);
-                controls.moveForward(-velocity.z * delta);
+                // --- 실제 같은 1인칭 효과 (Head Bobbing) ---
+                if (moveForward || moveBackward || moveLeft || moveRight) {
+                    walkTime += 0.15; // 걷는 속도에 맞춘 리듬
+                    // 위아래로 살짝 흔들림
+                    camera.position.y = eyeHeight + Math.sin(walkTime) * 0.03;
+                } else {
+                    // 가만히 있을 때 천천히 원래 높이로
+                    camera.position.y += (eyeHeight - camera.position.y) * 0.1;
+                }
             }
 
             renderer.render(scene, camera);
         }
-
         animate();
 
-        // 창 크기 변경 시 대응
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
